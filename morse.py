@@ -1,59 +1,87 @@
-import re
-from collections import Counter
-from functools import lru_cache
-from typing import Generator
+from typing import Dict, List, Generator, Set
+
+def morse_dict(fname: str) -> Dict:
+    with open(fname) as f:
+        lines = f.read().split("\n")[:-1]
+
+    split = lambda x: x.split(",")
+    return {m : c for c, m in map(split, lines)}
+
+def dictionary(fname: str) -> Set:
+    with open(fname) as f:
+        lines = f.read().split("\n")[:-1]
+
+    return {w.upper() for w in lines}
 
 
-MORSE = {'a':'.-', 'b':'-...', 'c':'-.-.', 'd':'-..', 'e':'.',
-         'f':'..-.', 'g':'--.', 'h':'....', 'i':'..',
-         'j':'.---', 'k':'-.-', 'l':'.-..', 'm':'--', 'n':'-.',
-         'o':'---', 'p':'.--.', 'q':'--.-', 'r':'.-.',
-         's':'...', 't':'-', 'u':'..-', 'v':'...-', 'w':'.--',
-         'x':'-..-', 'y':'-.--', 'z':'--..'}
+class Tree:
+    def __init__(self, code=None):
+        self.code = code
+        self.char = MORSE[code] if code is not "" else None
+        self.left = None
+        self.right = None
 
-# a map of letters to next letters given the addition of a . or a -
-MORSE_PREFIXES = {
-    '^': 'et',
-    'e': 'ia', 't': 'nm',
-    'i': 'su', 'a': 'rw', 'n': 'dk', 'm': 'go',
-    's': 'hv', 'u': 'f$', 'r': 'l$', 'w': 'pj', 'd': 'bx', 'k': 'cy', 'g': 'zq'
-}
+    def __repr__(self):
+        return f"{self.char}"
+
+    def __eq__(self, other):
+        return self.code == other.code
 
 
-def words(text: str) -> list: return re.findall('\w+', text.lower())
+def populate_tree(morse: Dict) -> Tree:
 
-WORDS = Counter(words(open("big.txt").read()))
+    tree = Tree("")
 
+    frontier = [tree]
+    while frontier:
+        f = frontier.pop()
+        if f.code + "-" in morse:
+            node = Tree(f.code + "-")
+            f.left = node
+            frontier.append(node)
+        if f.code + "." in morse:
+            node = Tree(f.code + ".")
+            f.right = node
+            frontier.append(node)
 
-def encode(word: str) -> str:
-    return "".join(MORSE[l] for l in word)
-
-
-def prob(word: str) -> float:
-    return WORDS[word] / sum(WORDS.values())
-
-
-def next_letter(letter: str, morse_char: str) -> str:
-    i = 0 if morse_char is '.' else 1
-    return MORSE_PREFIXES.get(letter, '$$')[i]
-
-@lru_cache()
-def parse(code: str, i: int =0, text: str = '', letter: str= '^') -> Generator:
-    if i < len(code):
-        letter = next_letter(letter, code[i])
-        if letter != '$':
-            yield from parse(code, i + 1, text, letter)
-            yield from parse(code, i + 1, text + letter)
-    elif letter == '^':
-        yield text
+    return tree
 
 
-def decode(morse: str) -> str:
-    candidates = parse(m)
-    return max(candidates, key=prob)
+MORSE = morse_dict("morse.csv")
+TREE = populate_tree(MORSE)
+DICTIONARY = dictionary("/usr/share/dict/british-english")
+
+
+def next_tree(tree: Tree, code: str) -> Tree:
+    return tree.left if code is '-' else tree.right
+
+
+def parse(code: str, state: Tree = TREE, tree: List = []) -> Generator:
+
+    if code:
+        head, tail = code[0], code[1:]
+
+        state = next_tree(state, head)
+        if state:
+            yield from parse(tail, state, tree)
+            yield from parse(tail, TREE, tree + [state])
+
+    elif state == TREE:
+        yield tree
+
+
+def is_word(word: str) -> bool:
+    return word in DICTIONARY
+
+
+def show_parse(code: str, n: int = 100) -> List[str]:
+
+    for _, trees in zip(range(n), parse(code)):
+        word = "".join(t.char for t in trees)
+
+        if is_word(word):
+            print(word)
 
 
 if __name__ == "__main__":
-
-    m = encode("code")
-    print(decode(m))
+    show_parse("......-...-..---", n=1000)
