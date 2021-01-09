@@ -52,16 +52,12 @@ TREE = populate_tree(MORSE)
 DICTIONARY = dictionary("/usr/share/dict/british-english")
 
 
-def next_tree(tree: Tree, code: str) -> Tree:
-    return tree.left if code is '-' else tree.right
-
-
 def parse(code: str, state: Tree = TREE, tree: List = []) -> Generator:
 
     if code:
         head, tail = code[0], code[1:]
 
-        state = next_tree(state, head)
+        state = state.left if head is '-' else state.right
         if state:
             yield from parse(tail, state, tree)
             yield from parse(tail, TREE, tree + [state])
